@@ -1,0 +1,20 @@
+{
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@/*": [
+        "./*"
+      ]
+    },
+    "jsx": "react-jsx",
+    "moduleResolution": "node"
+  },
+  "include": [
+    "app",
+    "components",
+    "lib",
+    "styles",
+    "pages",
+    "next-env.d.ts"
+  ]
+}

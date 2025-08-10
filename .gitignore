@@ -1,0 +1,17 @@
+# build & deps
+node_modules/
+.next/
+out/
+dist/
+
+# system
+.DS_Store
+Thumbs.db
+
+# env & misc
+.env*
+.vercel/
+*.log
+
+# local zips / exports
+*.zip
