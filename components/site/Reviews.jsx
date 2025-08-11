@@ -1,0 +1,51 @@
+"use client";
+import React, { useEffect, useState } from "react";
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { Facebook, Star } from "lucide-react";
+import { motion } from "framer-motion";
+
+export default function Reviews(){
+  const [data, setData] = useState({ source:"mock", items:[] });
+  useEffect(()=>{
+    fetch("/api/facebook-reviews").then(r=>r.json()).then(d=>{
+      if(!d.items || !d.items.length){
+        setData({ source:"mock", items:[{ id:"x1", reviewer:"Gast", rating:5, review_text:"Fantastisch!", created_time:new Date().toISOString() }] });
+      } else setData(d);
+    }).catch(()=>{
+      setData({ source:"mock", items:[{ id:"x1", reviewer:"Gast", rating:5, review_text:"Fantastisch!", created_time:new Date().toISOString() }] });
+    });
+  }, []);
+  const items = data.items || [];
+  return (
+    <section id="reviews" className="bg-gray-50 dark:bg-gray-900 py-16 sm:py-24">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <h2 className="text-3xl sm:text-4xl font-semibold tracking-tight mb-6">Reviews</h2>
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {items.map((r)=>(
+            <motion.div key={r.id} initial={{opacity:0, y:10}} whileInView={{opacity:1, y:0}} viewport={{once:true}}>
+              <Card className="rounded-2xl hover:shadow-lg transition-shadow">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base flex items-center justify-between">
+                    <span>{r.reviewer}</span>
+                    <span className="text-xs text-gray-500">{new Date(r.created_time).toLocaleDateString()}</span>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="pt-0 text-sm text-gray-600 dark:text-gray-300">
+                  <div className="flex items-center gap-1 mb-2" aria-label={`${r.rating} / 5`}>
+                    {Array.from({length:5}).map((_,i)=>(
+                      <Star key={i} className={`h-4 w-4 ${i < Math.round(r.rating || 5) ? "fill-current" : "opacity-30"}`} />
+                    ))}
+                  </div>
+                  {r.review_text || "—"}
+                </CardContent>
+              </Card>
+            </motion.div>
+          ))}
+        </div>
+        <p className="text-xs text-gray-500 mt-3 flex items-center gap-2">
+          <Facebook className="h-4 w-4" /> Bron: {data.source}
+        </p>
+      </div>
+    </section>
+  );
+}
