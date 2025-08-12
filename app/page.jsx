@@ -13,22 +13,25 @@ import Reviews from "@/components/site/Reviews";
 import Location from "@/components/site/Location";
 import BookingContact from "@/components/site/BookingContact";
 import Footer from "@/components/site/Footer";
+import { I18nProvider } from "@/components/site/i18n";
 
 export default function Page() {
   return (
-    <div className="min-h-screen bg-white text-gray-900 dark:bg-gray-950 dark:text-gray-100">
-      <Header />
-      <Hero />
-      <FeatureCards />
-      <Rooms />
-      <Wellness />
-      <WineSection />
-      <Gallery />
-      <Pricing />
-      <Reviews />
-      <Location />
-      <BookingContact />
-      <Footer />
-    </div>
+    <I18nProvider>
+      <div className="min-h-screen bg-white text-gray-900 dark:bg-gray-950 dark:text-gray-100">
+        <Header />
+        <Hero />
+        <FeatureCards />
+        <Rooms />
+        <Wellness />
+        <WineSection />
+        <Gallery />
+        <Pricing />
+        <Reviews />
+        <Location />
+        <BookingContact />
+        <Footer />
+      </div>
+    </I18nProvider>
   );
 }

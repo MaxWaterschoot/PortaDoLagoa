@@ -12,17 +12,55 @@ import {
   PopoverContent,
 } from "@/components/ui/popover";
 import { CalendarCheck, Phone, Mail, MapPin } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import { SITE } from "./constants";
 import { fmt, startOfToday, toISO } from "./helpers";
+import { useI18n } from "./i18n";
+import { useRecaptchaV3 } from "./useRecaptchaV3";
 
 export default function BookingContact() {
-  const [errors, setErrors] = useState([]);
+  const { t } = useI18n();
+  const { getToken } = useRecaptchaV3();
+
   const [tab, setTab] = useState("book");
   const [range, setRange] = useState({ from: null, to: null });
+  const [errors, setErrors] = useState([]);
+  const [captchaError, setCaptchaError] = useState("");
 
-  function submit(e) {
-    e.preventDefault();
+  async function submit(e) {
+    e.preventDefault(); // eerst: standaard submit blokkeren
+
+    // 1) reCAPTCHA v3 token
+    let token;
+    try {
+      token = await getToken("booking_submit");
+    } catch {
+      setCaptchaError(
+        "reCAPTCHA kon niet geladen worden. Controleer adblockers en probeer opnieuw."
+      );
+      return;
+    }
+
+    // 2) server-side verificatie
+    try {
+      const resp = await fetch("/api/verify-recaptcha", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token, action: "booking_submit" }),
+      });
+      const json = await resp.json();
+      if (!json.success) {
+        setCaptchaError(
+          "Verificatie mislukt (mogelijke spam). Probeer opnieuw."
+        );
+        return;
+      }
+    } catch {
+      setCaptchaError("Verificatieserver onbereikbaar. Probeer later opnieuw.");
+      return;
+    }
+
+    // 3) formulier-validatie
     const form = e.currentTarget;
     const vals = Object.fromEntries(new FormData(form).entries());
     const err = [];
@@ -35,6 +73,7 @@ export default function BookingContact() {
     if (!vals.checkout) err.push("Check-out is verplicht.");
     if (!range.from || !range.to)
       err.push("Kies een geldige verblijfsperiode.");
+
     const ci = vals.checkin ? new Date(vals.checkin) : null;
     const co = vals.checkout ? new Date(vals.checkout) : null;
     const midnight = (d) =>
@@ -45,17 +84,21 @@ export default function BookingContact() {
     if (co && co < todayMid)
       err.push("Check-out mag niet in het verleden liggen.");
     if (ci && co && co <= ci) err.push("Check-out moet na check-in liggen.");
+
     setErrors(err);
     if (err.length) return;
+
+    // 4) versturen (mailto)
     const subject = encodeURIComponent(
       `Boekingsaanvraag — ${vals.first} ${vals.last}`
     );
     const body = encodeURIComponent(
-      `Naam: ${vals.first} ${vals.last}\nE-mail: ${vals.email}\nTelefoon: ${
-        vals.phone
-      }\nCheck-in: ${vals.checkin}\nCheck-out: ${vals.checkout}\nOpmerkingen: ${
-        vals.notes || ""
-      }`
+      `Naam: ${vals.first} ${vals.last}
+E-mail: ${vals.email}
+Telefoon: ${vals.phone}
+Check-in: ${vals.checkin}
+Check-out: ${vals.checkout}
+Opmerkingen: ${vals.notes || ""}`
     );
     window.location.href = `mailto:${SITE.email}?subject=${subject}&body=${body}`;
   }
@@ -69,198 +112,200 @@ export default function BookingContact() {
         <div className="grid lg:grid-cols-2 gap-10">
           <div>
             <h2 className="text-3xl sm:text-4xl font-semibold tracking-tight">
-              Boeken & Contact
+              {t("contact.title")}
             </h2>
             <p className="mt-3 text-gray-600 dark:text-gray-300 max-w-prose">
-              Vragen over beschikbaarheid of speciale wensen? Laat een bericht
-              achter — we antwoorden snel.
+              {t("contact.subtitle")}
             </p>
 
             <Tabs value={tab} onValueChange={setTab} className="mt-6">
-              {/* Sliding pill */}
-              <TabsList className="relative grid grid-cols-2 p-1 rounded-xl bg-muted">
+              {/* Slider tabs – pill + transparante triggers */}
+              <TabsList className="relative flex p-1 rounded-xl bg-muted overflow-hidden ring-1 ring-border">
+                {/* animated pill – iets lichter tint */}
+                <motion.span
+                  className="absolute inset-y-1 left-1 w-[calc(50%-0.5rem)] rounded-lg bg-primary/85 shadow-sm z-0"
+                  animate={{ x: tab === "book" ? "0%" : "100%" }}
+                  transition={{ duration: 0.25, ease: "easeInOut" }}
+                  style={{ pointerEvents: "none" }}
+                />
+
                 <TabsTrigger
                   value="book"
-                  className="relative rounded-lg px-3 py-1.5 font-medium data-[state=active]:text-primary-foreground"
+                  className="relative flex-1 rounded-lg px-3 py-1.5 font-medium bg-transparent data-[state=active]:bg-transparent z-10
+               text-foreground data-[state=active]:text-primary-foreground"
                 >
-                  {tab === "book" && (
-                    <motion.span
-                      layoutId="tabs-pill"
-                      className="absolute inset-0 rounded-lg bg-primary shadow-sm"
-                      style={{ pointerEvents: "none" }}
-                      transition={{ duration: 0.25, ease: "easeInOut" }}
-                    />
-                  )}
-                  <span className="relative z-10">Boeken</span>
+                  <span className="relative z-10">
+                    {t("contact.tabs.book")}
+                  </span>
                 </TabsTrigger>
+
                 <TabsTrigger
                   value="contact"
-                  className="relative rounded-lg px-3 py-1.5 font-medium data-[state=active]:text-primary-foreground"
+                  className="relative flex-1 rounded-lg px-3 py-1.5 font-medium bg-transparent data-[state=active]:bg-transparent z-10
+               text-foreground data-[state=active]:text-primary-foreground"
                 >
-                  {tab === "contact" && (
-                    <motion.span
-                      layoutId="tabs-pill"
-                      className="absolute inset-0 rounded-lg bg-primary shadow-sm"
-                      style={{ pointerEvents: "none" }}
-                      transition={{ duration: 0.25, ease: "easeInOut" }}
-                    />
-                  )}
-                  <span className="relative z-10">Contact</span>
+                  <span className="relative z-10">
+                    {t("contact.tabs.contact")}
+                  </span>
                 </TabsTrigger>
               </TabsList>
 
               {/* Sliding content */}
-              <div className="relative overflow-x-hidden overflow-y-visible mt-4 min-h-[520px] sm:min-h-[440px] md:min-h-[380px]">
-                <AnimatePresence mode="wait" initial={false}>
-                  {tab === "book" ? (
-                    <motion.div
-                      key="book"
-                      initial={{ x: -40, opacity: 0 }}
-                      animate={{ x: 0, opacity: 1 }}
-                      exit={{ x: 40, opacity: 0 }}
-                      transition={{ duration: 0.25, ease: "easeInOut" }}
-                      className="absolute inset-0"
-                    >
-                      <form className="grid gap-3 pb-2" onSubmit={submit}>
-                        <div className="grid sm:grid-cols-2 gap-3">
-                          <Input name="first" placeholder="Voornaam" required />
-                          <Input
-                            name="last"
-                            placeholder="Achternaam"
-                            required
-                          />
-                        </div>
-                        <div className="grid gap-2">
-                          <label className="block text-sm">Verblijf</label>
-                          <Popover>
-                            <PopoverTrigger asChild>
-                              <Button
-                                variant="outline"
-                                className="justify-start font-normal"
-                              >
-                                {range.from && range.to
-                                  ? `${fmt(range.from)} → ${fmt(range.to)}`
-                                  : "Selecteer check-in & check-out"}
-                              </Button>
-                            </PopoverTrigger>
-                            <PopoverContent align="start" className="p-0">
-                              <Calendar
-                                mode="range"
-                                numberOfMonths={2}
-                                selected={range}
-                                onSelect={(r) =>
-                                  setRange(r ?? { from: null, to: null })
-                                }
-                                disabled={{ before: startOfToday() }}
-                                initialFocus
-                              />
-                            </PopoverContent>
-                          </Popover>
-                          <input
-                            type="hidden"
-                            name="checkin"
-                            value={toISO(range.from)}
-                          />
-                          <input
-                            type="hidden"
-                            name="checkout"
-                            value={toISO(range.to)}
-                          />
-                        </div>
+              <div className="mt-4 relative overflow-hidden">
+                <motion.div
+                  className="flex w-[200%]"
+                  animate={{ x: tab === "book" ? "0%" : "-50%" }}
+                  transition={{ duration: 0.25, ease: "easeInOut" }}
+                >
+                  {/* Boeken-paneel */}
+                  <div className="w-1/2 pr-0 sm:pr-6">
+                    <form className="grid gap-3 pb-2" onSubmit={submit}>
+                      <div className="grid sm:grid-cols-2 gap-3">
                         <Input
-                          name="email"
-                          type="email"
-                          placeholder="E-mail"
+                          name="first"
+                          placeholder={t("form.first")}
                           required
                         />
                         <Input
-                          name="phone"
-                          type="tel"
-                          placeholder="Telefoon"
+                          name="last"
+                          placeholder={t("form.last")}
                           required
                         />
-                        <Textarea
-                          name="notes"
-                          placeholder="Opmerkingen (optioneel)"
-                        />
-                        {errors.length > 0 && (
-                          <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950/30 dark:text-red-300 dark:border-red-900">
-                            <ul className="list-disc pl-4">
-                              {errors.map((e, i) => (
-                                <li key={i}>{e}</li>
-                              ))}
-                            </ul>
-                          </div>
-                        )}
-                        <div className="flex flex-wrap gap-2">
-                          <Button type="submit">
-                            <CalendarCheck className="mr-2 h-4 w-4" />
-                            Verstuur aanvraag
-                          </Button>
-                          <a href="#pricing">
-                            <Button variant="outline">Prijzen</Button>
-                          </a>
-                        </div>
-                      </form>
-                    </motion.div>
-                  ) : (
-                    <motion.div
-                      key="contact"
-                      initial={{ x: 40, opacity: 0 }}
-                      animate={{ x: 0, opacity: 1 }}
-                      exit={{ x: -40, opacity: 0 }}
-                      transition={{ duration: 0.25, ease: "easeInOut" }}
-                      className="absolute inset-0"
-                    >
-                      <div className="space-y-3 text-sm">
-                        <p className="flex items-center gap-2">
-                          <Phone className="h-4 w-4" /> {SITE.phone}
-                        </p>
-                        <p className="flex items-center gap-2">
-                          <Mail className="h-4 w-4" /> {SITE.email}
-                        </p>
-                        <p className="flex items-center gap-2">
-                          <MapPin className="h-4 w-4" /> {SITE.address}
-                        </p>
                       </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
+
+                      <div className="grid gap-2">
+                        <label className="block text-sm">
+                          {t("form.stay")}
+                        </label>
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <Button
+                              variant="outline"
+                              className="justify-start font-normal"
+                            >
+                              {range.from && range.to
+                                ? `${fmt(range.from)} → ${fmt(range.to)}`
+                                : t("form.selectRange")}
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent align="start" className="p-0">
+                            <Calendar
+                              mode="range"
+                              numberOfMonths={2}
+                              selected={range}
+                              onSelect={(r) =>
+                                setRange(r ?? { from: null, to: null })
+                              }
+                              disabled={{ before: startOfToday() }}
+                              initialFocus
+                            />
+                          </PopoverContent>
+                        </Popover>
+                        <input
+                          type="hidden"
+                          name="checkin"
+                          value={toISO(range.from)}
+                        />
+                        <input
+                          type="hidden"
+                          name="checkout"
+                          value={toISO(range.to)}
+                        />
+                      </div>
+
+                      <Input
+                        name="email"
+                        type="email"
+                        placeholder={t("form.email")}
+                        required
+                      />
+                      <Input
+                        name="phone"
+                        type="tel"
+                        placeholder={t("form.phone")}
+                        required
+                      />
+                      <Textarea name="notes" placeholder={t("form.notes")} />
+
+                      {/* veldfouten */}
+                      {errors.length > 0 && (
+                        <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950/30 dark:text-red-300 dark:border-red-900">
+                          <ul className="list-disc pl-4">
+                            {errors.map((e, i) => (
+                              <li key={i}>{e}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+
+                      {/* captcha-fout (boven knoppen) */}
+                      {captchaError && (
+                        <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950/30 dark:text-red-300 dark:border-red-900">
+                          {captchaError}
+                        </div>
+                      )}
+
+                      <div className="flex flex-wrap gap-2">
+                        <Button type="submit">
+                          <CalendarCheck className="mr-2 h-4 w-4" />
+                          {t("form.send")}
+                        </Button>
+                        <a href="#pricing">
+                          <Button variant="outline">{t("cta.pricing")}</Button>
+                        </a>
+                      </div>
+                    </form>
+                  </div>
+
+                  {/* Contact-paneel */}
+                  <div className="w-1/2 pl-0 sm:pl-6">
+                    <div className="space-y-3 text-sm">
+                      <p className="flex items-center gap-2">
+                        <Phone className="h-4 w-4" /> {SITE.phone}
+                      </p>
+                      <p className="flex items-center gap-2">
+                        <Mail className="h-4 w-4" /> {SITE.email}
+                      </p>
+                      <p className="flex items-center gap-2">
+                        <MapPin className="h-4 w-4" /> {SITE.address}
+                      </p>
+                    </div>
+                  </div>
+                </motion.div>
               </div>
             </Tabs>
           </div>
 
+          {/* rechterkolom */}
           <div className="space-y-4">
             <Card className="rounded-2xl hover:shadow-lg transition-shadow">
               <CardHeader>
-                <CardTitle>Waarom kiezen voor Porta da Lagoa?</CardTitle>
+                <CardTitle>{t("why.title")}</CardTitle>
               </CardHeader>
               <CardContent className="text-sm text-gray-600 dark:text-gray-300 space-y-2">
-                <p>✔ Intieme B&B met moderne afwerking</p>
-                <p>✔ Wellnessfaciliteiten en wijnselectie</p>
-                <p>✔ Zeezicht en strand dichtbij</p>
-                <p>✔ Vers en lokaal ontbijt</p>
+                <p>{t("why.l1")}</p>
+                <p>{t("why.l2")}</p>
+                <p>{t("why.l3")}</p>
+                <p>{t("why.l4")}</p>
               </CardContent>
             </Card>
-            <motion.div whileHover={{ scale: 1.03 }}>
-              <Card className="rounded-2xl overflow-hidden">
-                <div
-                  className="h-36 bg-cover bg-center"
-                  style={{
-                    backgroundImage: `url(https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?q=80&w=1600&auto=format&fit=crop)`,
-                  }}
-                />
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-base">
-                    Speciale arrangementen
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="pt-0 text-sm text-gray-600 dark:text-gray-300">
-                  Verjaardagsverrassing? Romantische getaway? We denken graag
-                  mee.
-                </CardContent>
-              </Card>
-            </motion.div>
+            <Card className="rounded-2xl overflow-hidden">
+              <div
+                className="h-36 bg-cover bg-center"
+                style={{
+                  backgroundImage:
+                    "url(https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?q=80&w=1600&auto=format&fit=crop)",
+                }}
+              />
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base">
+                  {t("arrangements.title")}
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="pt-0 text-sm text-gray-600 dark:text-gray-300">
+                {t("arrangements.body")}
+              </CardContent>
+            </Card>
           </div>
         </div>
       </div>
