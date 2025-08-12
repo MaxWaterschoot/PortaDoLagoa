@@ -10,8 +10,7 @@ export const metadata = {
   metadataBase: new URL("https://portadalagoa.example"),
   openGraph: {
     title: "Porta da Lagoa — B&B",
-    description:
-      "Moderne B&B met zeezicht, wellness (sauna & jacuzzi) en rode wijn.",
+    description: "Moderne B&B met zeezicht, wellness (sauna) en rode wijn.",
     type: "website",
     url: "https://portadalagoa.example",
     images: [

@@ -287,6 +287,7 @@ Opmerkingen: ${vals.notes || ""}`
                 <p>{t("why.l2")}</p>
                 <p>{t("why.l3")}</p>
                 <p>{t("why.l4")}</p>
+                <p>{t("why.l5")}</p>
               </CardContent>
             </Card>
             <Card className="rounded-2xl overflow-hidden">
